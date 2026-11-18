@@ -5,3 +5,7 @@ patches/*.patch text eol=lf
 # Preserve the official vendored package byte-for-byte on Windows.
 vendor/three@0.160.0/** -text
 *.ps1 text eol=lf
+
+# The preload generator compares its LF output byte-for-byte.
+src/fresh.js text eol=lf
+src/maps/preload.js text eol=lf
