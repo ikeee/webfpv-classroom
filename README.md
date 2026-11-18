@@ -1,3 +1,21 @@
+# WebFPV classroom local deployment
+
+This is a fork of [Mathew-Harvey/WebFPVSimulator](https://github.com/Mathew-Harvey/WebFPVSimulator), with local Windows deployment helpers and a pinned local copy of Three.js. The flight simulator, physics and lessons are the upstream project's work. This fork is independently maintained and does not imply any upstream sponsor partnership or endorsement.
+
+Use Node.js 22 or newer. Clone this repository, open PowerShell in its folder and run:
+
+```powershell
+.\start-local.ps1
+# Open http://127.0.0.1:4186/?map=field
+# Stop later with .\stop-local.ps1
+```
+
+No npm install or Steam is needed. Choose **Fly Solo > Career > Start > Fly** for the first lesson. W/S adjust throttle, A/D yaw, arrow keys pitch/roll, R resets and Esc pauses. The basic solo renderer and simulator load locally; leaderboard and multiplayer services are separate and are not included in this deployment.
+
+Read [LOCAL-DEPLOY.md](LOCAL-DEPLOY.md) for operation and rollback, [LICENSE](LICENSE) for GPL-3.0-or-later, and [NOTICE](NOTICE) for third-party materials and their separate restrictions. Do not assume the GPL code license applies to all artwork, voices, logos or music.
+
+The upstream README follows.
+
 # WebFPVSimulator
 
 A browser FPV simulator whose only current goal is flight feel

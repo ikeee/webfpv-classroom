@@ -386,3 +386,6 @@ the kind of thing that is discovered by somebody else.
 triangles, 15 kB. Its shapes follow the source's measurements and nothing of
 its textures is kept. Until the source's licence is known it should be treated
 as the owner's own supply and not as GPLv3 grant material.
+
+## Local deployment: three.js 0.160.0 (2026-11-18)
+The official npm three@0.160.0 package is vendored at vendor/three@0.160.0/ for local loading instead of the CDN. Its unmodified MIT license is retained there. Package SHA1: cd1e4dbd01aee0719280a9086d75545db52b7a8f. This entry supplements the upstream three.js CDN entry above for this checkout.

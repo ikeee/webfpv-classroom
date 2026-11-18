@@ -93,8 +93,8 @@
    * add-on table for.
    */
   const IMPORTS = {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    "three": "./vendor/three@0.160.0/build/three.module.js",
+    "three/addons/": "./vendor/three@0.160.0/examples/jsm/"
   };
 
   // GENERATED BELOW by scripts/gen-preload.js, do not edit by hand
@@ -755,14 +755,14 @@
       'src/ui/loading.js',
       'src/maps/build-cost.js',
       'src/share/windows.js',
-      'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
+      './vendor/three@0.160.0/build/three.module.js',
       'src/main.js',
       'src/render/shell.js',
       'src/render/craft.js',
       'src/game/collide.js',
       'src/render/frame.js',
       'src/render/herocraft.js',
-      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js',
+      './vendor/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js',
       'src/render/celmat.js',
       'src/render/comic.js',
       'src/render/lattice.js',
@@ -895,14 +895,15 @@
       'src/art/clubhouse.js',
       'src/maps/field.js',
       'src/render/post.js',
-      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js',
-      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/shaders/CopyShader.js',
-      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js',
-      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/Pass.js',
-      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/MaskPass.js',
-      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/RenderPass.js',
-      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js',
-      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/shaders/LuminosityHighPassShader.js',
+      './vendor/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js',
+      'vendor/three@0.160.0/examples/jsm/shaders/CopyShader.js',
+      'vendor/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js',
+      'vendor/three@0.160.0/examples/jsm/postprocessing/Pass.js',
+      'vendor/three@0.160.0/examples/jsm/postprocessing/MaskPass.js',
+      './vendor/three@0.160.0/examples/jsm/postprocessing/RenderPass.js',
+      './vendor/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js',
+      './vendor/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js',
+      'vendor/three@0.160.0/examples/jsm/shaders/LuminosityHighPassShader.js',
       'src/game/trackdoc.js',
       'src/trackbuilder/seat.js',
       'src/trackbuilder/path.js',
@@ -922,7 +923,8 @@
   /* The address a module is imported from: the one the import map gives it. */
   const deployed = (url) => (stamp && listed.has(url) ? `${url}?d=${stamp}` : url);
 
-  const imports = { ...IMPORTS };
+  // Resolve local third-party modules against the site root, including on builder pages.
+  const imports = Object.fromEntries(Object.entries(IMPORTS).map(([key, value]) => [key, at(value)]));
   if (stamp) {
     for (const url of listed) {
       imports[url] = deployed(url);
