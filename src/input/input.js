@@ -280,9 +280,10 @@ const SELECT_HOLD_MS = 700;
 /* The wizard's steps for a given radio. The menu switch is only asked for
  * when the radio cannot answer any other way, because asking every pilot to
  * assign one is friction for a problem they do not have. */
-export function calSteps(hasButtons, axisCount = 0) {
+export function calSteps(hasButtons, axisCount = 0, skipThrottle = false) {
+  const base = skipThrottle ? CAL_STEPS.filter((step) => step !== 'throttle') : CAL_STEPS;
   if (hasButtons) {
-    return CAL_STEPS;
+    return base;
   }
   /*
    * AND ONLY WHEN THE RADIO HAS AN AXIS TO SPARE, because otherwise the
@@ -304,9 +305,9 @@ export function calSteps(hasButtons, axisCount = 0) {
    * Skip that the step itself now offers.
    */
   if (axisCount <= IDENT_CHANNELS.length) {
-    return CAL_STEPS;
+    return base;
   }
-  const out = CAL_STEPS.slice();
+  const out = base.slice();
   out.splice(out.indexOf('confirm'), 0, SELECT_STEP);
   return out;
 }
@@ -693,6 +694,8 @@ function cloneMap(map) {
      * round rather than with undefined holes. */
     reverse: cloneReverse(map.reverse),
     stored: Boolean(map.stored),
+    // Keep a tilt calibration scoped to the firmware's browser axis layout.
+    tiltLayout: ['tilt', 'tilt-windows'].includes(map.tiltLayout) ? map.tiltLayout : null,
   };
 }
 
@@ -703,6 +706,28 @@ function snapshotAxes(gp) {
     out[i] = gp.axes[i];
   }
   return out;
+}
+
+/*
+ * The classroom tilt controller is a real three-axis HID pad: pitch, roll and
+ * yaw live on the sticks, while W and S keep the collective because an
+ * MPU6050 has no throttle. It still exposes the six axes of the standard
+ * gamepad descriptor, so the browser lists it normally.
+ */
+const TILT_PAD_ID = /webFPV tilt pad/i;
+// Windows exposes the HID interface name instead of USB.productName(). Match
+// the observed interface, VID/PID and report shape, not every Espressif pad.
+const TILT_PAD_WINDOWS_ID = /^TinyUSB HID \(Vendor: 303a Product: 1001\)$/i;
+
+function windowsTiltLayout(gp) {
+  return Boolean(gp && gp.mapping !== 'standard' && gp.axes && gp.axes.length >= 6
+    && gp.buttons && gp.buttons.length === 32);
+}
+
+function isTiltPad(gp) {
+  const id = String(gp && gp.id || '');
+  return Boolean(gp && (TILT_PAD_ID.test(id)
+    || (windowsTiltLayout(gp) && TILT_PAD_WINDOWS_ID.test(id))));
 }
 
 /* How often the pad roster runs when the pad count has not changed: see
@@ -2394,6 +2419,7 @@ export class InputManager {
    * and the list is replaced only when a verdict changes.
    */
   noteDeadChannels(ch, gp, dtMs) {
+    const tiltPad = isTiltPad(gp);
     let w = this.deadWatch;
     if (!w) {
       w = { ms: 0, span: {}, axes: [] };
@@ -2417,6 +2443,9 @@ export class InputManager {
       }
     }
     for (const name of IDENT_CHANNELS) {
+      if (name === 'throttle' && tiltPad) {
+        continue;
+      }
       if (this.deadAlive.has(name)) {
         continue;
       }
@@ -2943,8 +2972,15 @@ export class InputManager {
    */
   guessKey(gp) {
     const own = this.ownMap;
+    if (isTiltPad(gp)) {
+      const layout = windowsTiltLayout(gp) ? 'tilt-windows' : 'tilt';
+      return own.stored && own.tiltLayout === layout ? `own-${layout}` : layout;
+    }
     const standard = Boolean(gp && gp.mapping === 'standard');
     const radio = standard && firefoxRadio(gp);
+    if (own.tiltLayout) {
+      return standard ? (radio ? 'firefox' : `standard${this.stickMode}`) : 'aetr';
+    }
     /* The saved AETR guess on any standard pad, and the saved standard layout
      * on a Firefox radio, are guesses somebody pressed Save on. See
      * isAetrGuess and isStandardGuess. */
@@ -2970,8 +3006,21 @@ export class InputManager {
     if (key === this.mapKey) {
       return this.map;
     }
-    if (key === 'own') {
+    if (key === 'own' || key === 'own-tilt' || key === 'own-tilt-windows') {
       return this.ownMap;
+    }
+    if (key === 'aetr') {
+      return cloneMap(DEFAULT_MAP);
+    }
+    if (key === 'tilt' || key === 'tilt-windows') {
+      // Firmware sends X=yaw, Z=roll, Rz=pitch, independent of stick mode.
+      // Windows raw HID orders X,Y,Z,Rx,Ry,Rz; a standard pad uses axis 3.
+      const map = standardGuessMap(2);
+      if (key === 'tilt-windows') {
+        map.pitch.axis = 5;
+      }
+      map.throttle = {}; // W/S own throttle; posture must never produce thrust.
+      return map;
     }
     if (key === 'android') {
       return androidGuessMap();
@@ -2983,6 +3032,10 @@ export class InputManager {
     const key = this.guessKey(gp);
     if (key === this.mapKey) {
       return;
+    }
+    if (isTiltPad(gp) && key !== this.mapKey) {
+      // A previously selected radio may have left its throttle latched high.
+      this.resetKeyboardSticks();
     }
     this.map = this.mapFor(gp);
     this.mapKey = key;
@@ -3726,12 +3779,14 @@ export class InputManager {
   startCalibration() {
     this.calResult = null;
     const gp = this.firstGamepad();
+    const tiltPad = isTiltPad(gp);
     /* The step list is decided once, at the start, from what this radio
      * reports. Recomputing it per frame would let a wizard grow a step
      * halfway through if a button happened to be read late. */
     const steps = calSteps(
       Boolean(gp && gp.buttons && gp.buttons.length),
       gp ? snapshotAxes(gp).length : 0,
+      tiltPad,
     );
     this.calibration = {
       step: 'center',
@@ -3743,6 +3798,7 @@ export class InputManager {
       max: null,
       waiting: false,
       steps,
+      axisNeed: tiltPad ? 3 : 4,
       draft: {
         roll: null,
         pitch: null,
@@ -3795,7 +3851,7 @@ export class InputManager {
       checkOnly: true,
       /* The draft is the standard layout rather than anything the pilot
        * saved, so the stick mode moves it. See setStickMode. */
-      fromGuess: this.map.guess === 'standard',
+      fromGuess: !isTiltPad(gp) && this.map.guess === 'standard',
       draft: cloneMap(this.map),
     };
     return true;
@@ -3844,7 +3900,7 @@ export class InputManager {
       return false;
     }
     const gp = this.firstGamepad();
-    if (!gp) {
+    if (!gp || (isTiltPad(gp) && channel === 'throttle')) {
       return false;
     }
     /* Pressing the same button again stops listening. */
@@ -4016,15 +4072,21 @@ export class InputManager {
     if (!c || c.step !== 'confirm') {
       return false;
     }
-    if (!c.draft.roll || !c.draft.pitch || !c.draft.yaw || !c.draft.throttle) {
+    const needsThrottle = (c.steps || CAL_STEPS).includes('throttle');
+    if (!c.draft.roll || !c.draft.pitch || !c.draft.yaw
+      || (needsThrottle && !c.draft.throttle)) {
       return false;
     }
     /* select rides along in the draft and cloneMap keeps it. A radio with
      * buttons never assigned one and carries null, which is the same as
      * before this existed. */
-    this.map = cloneMap({ ...c.draft, stored: true });
+    const gp = this.firstGamepad();
+    const tiltLayout = isTiltPad(gp)
+      ? (windowsTiltLayout(gp) ? 'tilt-windows' : 'tilt') : null;
+    this.map = cloneMap({ ...c.draft, stored: true, tiltLayout });
+    if (tiltLayout) this.map.throttle = {}; // Collective always belongs to W/S.
     this.ownMap = this.map;
-    this.mapKey = 'own';
+    this.mapKey = tiltLayout ? `own-${tiltLayout}` : 'own';
     /* New axes to watch, so the old axes' step is not this map's, and the
      * flight flown on the old map is not a flight on this one. */
     this.forgetAxisResolution();
@@ -4202,7 +4264,7 @@ export class InputManager {
     const steps = c.steps || CAL_STEPS;
     const stepIndex = Math.max(0, steps.indexOf(c.step));
     const travelled = c.min && c.max ? travelCount(c.min, c.max, CAL.SWEEP_TRAVEL) : 0;
-    const need = c.min ? Math.min(4, c.min.length) : 4;
+    const need = c.min ? Math.min(c.axisNeed || 4, c.min.length) : (c.axisNeed || 4);
     const gp = this.firstGamepad();
     let channels = { roll: 0, pitch: 0, yaw: 0, throttle: 0 };
     let axes = [];
@@ -4323,6 +4385,7 @@ export class InputManager {
       travelled,
       need,
       canSave: c.step === 'confirm',
+      keyboardThrottle: isTiltPad(gp),
       /* Only the menu switch is ever skippable, and only because the hold
        * gesture covers the radio that is asked for one. See
        * skipCalibrationSelect. */
@@ -4411,7 +4474,7 @@ export class InputManager {
   }
 
   calSweep(c, axes, dtMs) {
-    const need = Math.min(4, c.min.length);
+    const need = Math.min(c.axisNeed || 4, c.min.length);
     const travelled = travelCount(c.min, c.max, CAL.SWEEP_TRAVEL);
     const settled = maxAbsDelta(axes, c.rest) < CAL.NEAR_REST;
     if (travelled < need || !settled) {
@@ -4428,7 +4491,8 @@ export class InputManager {
      * they are asked to judge. */
     c.sweepMin = c.min.slice();
     c.sweepMax = c.max.slice();
-    c.step = 'throttle';
+    const steps = c.steps || CAL_STEPS;
+    c.step = steps[steps.indexOf('sweep') + 1] || 'confirm';
     c.phase = 'hold';
     c.holdMs = 0;
   }
@@ -4768,6 +4832,9 @@ export class InputManager {
    * rather than run on every 2 ms poll.
    */
   gamepadLike(gp) {
+    if (isTiltPad(gp)) {
+      return true;
+    }
     if (gp.id !== this.padKindId) {
       this.padKindId = gp.id;
       const standard = gp.mapping === 'standard';
@@ -5055,13 +5122,16 @@ export class InputManager {
       next = { roll: 0, pitch: 0, yaw: 0, throttle: 0 };
       this.source = 'the calibration wizard';
     } else if (gp) {
+      const tiltPad = isTiltPad(gp);
       next = this.readGamepad(gp, this.map, Boolean(this.mode3d), true);
       /* The pad's own reading, before the keys below are laid over it: a
        * yaw flown on A and D is not the radio's yaw arriving. */
       if (this.flying) {
         this.noteDeadChannels(next, gp, dtMs);
       }
-      this.noteThrottleParked(gp);
+      if (!tiltPad) {
+        this.noteThrottleParked(gp);
+      }
       this.noteGuessOrder(gp);
       this.noteButtonTravel(gp);
       this.noteYawParked(gp, nowWall);
@@ -5072,16 +5142,19 @@ export class InputManager {
       if (this.stickCheck) {
         this.noteStickCheck(gp);
       }
-      this.source = this.mapUsable() ? 'a radio' : 'a radio whose stick order is a guess';
+      this.source = tiltPad ? 'the WebFPV tilt pad and W/S'
+        : (this.mapUsable() ? 'a radio' : 'a radio whose stick order is a guess');
       /* Keyboard still works while a pad is plugged in: any held stick
        * key overrides that channel. */
-      const kb = this.readKeyboard(dtMs, false);
+      const kb = this.readKeyboard(dtMs, tiltPad);
       for (const ch of ['roll', 'pitch', 'yaw']) {
         if (kb[ch] !== 0) {
           next[ch] = kb[ch];
         }
       }
-      if (this.keys.has(this.throttleKeys.up) || this.keys.has(this.throttleKeys.down)) {
+      if (tiltPad) {
+        next.throttle = kb.throttle;
+      } else if (this.keys.has(this.throttleKeys.up) || this.keys.has(this.throttleKeys.down)) {
         next.throttle = kb.throttle;
       } else {
         this.kb.throttle = next.throttle;

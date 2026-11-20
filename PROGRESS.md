@@ -76551,3 +76551,24 @@ Everything below was run twice: on the fix over 36b0dc2, and again on the merged
 - Live check: by 01:12:30Z https://webfpv.org/sim/ served this tree's src/input/input.js (d1041b8c15cb71c2) and src/main.js (1a1556633a0340c5) byte for byte, page Last-Modified 01:11:56Z, deploy stamp `toobbw`. A fresh headless profile booted https://webfpv.org/sim/ and https://webfpv.org/sim/?loop=raf with no page error and no console error, and on the second flew the field with every stick poll watched: 0 of 104 polls in 6 s were handed a stamp before the last poll's (the base in the same rig: 37 of 105). That is the clock, not a flight: the keyboard's feel is the pilots' to try.
 - bug-e464f141 set to `fixed` (01:13Z, answered 200), naming efffd1a and main ca2a7c2. The board lists 0 open and 0 in progress.
 - No verification scale was picked beyond the push word; it goes out not flown by a person.
+
+
+## 2026-11-20: classroom USB tilt controller publication
+
+Publish the three-axis ESP32-S3 input integration, Windows TinyUSB axis layout,
+keyboard-only collective and persistent per-layout calibration. Include portable
+XH-S3E firmware with 64-byte CDC status lines, an optional XIAO profile, wiring
+and build instructions, and the existing axis mapping assertions. Preserve the
+upstream simulator and its GPL/NOTICE, and include no device backups, serial
+captures, photographs or workstation paths. No physics or WASM ABI changes.
+The firmware verification script is compile-only. Physical acceptance is limited
+to the documented XH-S3E assembly; the fitted chip's 0x70 identity is not promoted
+to an exact part identification. Run the input regression and preload checks,
+compile both board profiles, and check the published files from a clean clone.
+
+Validation before publication: input-selftest reports all 553 passed; node syntax
+checks pass for input.js and ui.js; gen-preload --check is up to date (649 served).
+Arduino-ESP32 2.0.17 compiles both XH-S3E and XIAO profiles, including all 11
+axis-map static assertions per profile. Firmware sketch usage is 315305 bytes
+for XH-S3E and 311813 bytes for XIAO. This publication did not flash a device.
+These are targeted checks; no claim is made that every upstream test passes.

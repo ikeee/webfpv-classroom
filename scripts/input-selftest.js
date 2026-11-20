@@ -1213,6 +1213,192 @@ section('the keyboard throttle: a tap on the pad does not launch, a press past t
   check('and still does once it is flying', im.channels.throttle === im.kbHover, String(im.channels.throttle));
 }
 
+section('the Windows TinyUSB tilt pad never turns posture into throttle');
+{
+  // Captured from the actual Windows browser, including its extra HID axes.
+  const id = 'TinyUSB HID (Vendor: 303a Product: 1001)';
+  const pad = makePad([0.2, 0, 0.4, 0, 0, -0.3, 0, 0, 0, 1227133568], 32, id);
+  const rig = new Rig(pad);
+  const im = rig.im;
+  rig.run(600);
+  check('a resting Windows tilt pad starts at zero throttle despite tilted axes',
+    im.channels.throttle === 0, JSON.stringify(im.channels));
+  check('Windows tilt uses Z for roll, Rz (axis 5) for pitch and X for yaw',
+    im.channels.roll > 0.3 && im.channels.pitch < -0.2 && im.channels.yaw > 0.1,
+    JSON.stringify(im.channels));
+  check('the Windows tilt path explicitly assigns throttle to W/S',
+    im.source === 'the WebFPV tilt pad and W/S', im.source);
+  for (const value of [-1, 0, 1]) {
+    for (const axis of [0, 2, 5]) rig.ax(axis, value);
+    rig.run(160);
+    check(`Windows tilt posture ${value} cannot change idle throttle`,
+      im.channels.throttle === 0);
+  }
+  im.setStickMode(1);
+  rig.run(100);
+  check('changing the displayed stick mode does not rewire firmware axes',
+    im.map.roll.axis === 2 && im.map.pitch.axis === 5 && im.map.yaw.axis === 0
+      && !Number.isInteger(im.map.throttle.axis));
+  im.setStickMode(2);
+
+  im.keys.add('KeyW');
+  rig.run(1264);
+  check('Windows tilt W reaches full throttle', im.channels.throttle === 1);
+  im.keys.delete('KeyW');
+  rig.run(600);
+  check('Windows tilt release rests at hover after deliberate takeoff',
+    im.channels.throttle === im.kbHover);
+  im.keys.add('KeyS');
+  rig.run(400);
+  check('Windows tilt S reduces the collective', im.channels.throttle < im.kbHover);
+  im.keys.delete('KeyS');
+  im.resetKeyboardSticks();
+  rig.run(600);
+  check('restart parks Windows tilt throttle at zero', im.channels.throttle === 0);
+  im.startCalibration();
+  check('Windows tilt calibration does not request a hardware throttle',
+    !im.calibration.steps.includes('throttle') && im.calibration.axisNeed === 3);
+
+  const stale = new Rig(pad);
+  stale.im.kb.throttle = 0.7;
+  stale.run(300);
+  check('selecting the tilt pad discards a previous radio throttle',
+    stale.im.channels.throttle === 0);
+
+  for (const other of [
+    makePad(pad.axes, 32, 'TinyUSB HID (Vendor: cafe Product: 1001)'),
+    makePad(pad.axes, 32, 'Other USB HID (Vendor: 303a Product: 1001)'),
+    makePad([0, 0, 0, 0], 8, id),
+  ]) {
+    const normal = new Rig(other);
+    normal.run(100);
+    check(`an unrelated HID stays a radio: ${other.id}, ${other.axes.length} axes`,
+      normal.im.source !== 'the WebFPV tilt pad and W/S');
+  }
+}
+
+section('tilt calibration persists without borrowing a radio throttle');
+for (const windows of [false, true]) {
+  const storage = memoryStorage();
+  const pad = makePad(Array(windows ? 10 : 6).fill(0), windows ? 32 : 8,
+    windows ? 'TinyUSB HID (Vendor: 303a Product: 1001)' : 'WebFPV Tilt Pad');
+  const rig = new Rig(pad, storage);
+  rig.run(100);
+  const im = rig.im;
+  im.startCalibrationCheck();
+  check('tilt check cannot bind posture to throttle', !im.listenForChannel('throttle'));
+  im.reverseChannel('roll');
+  // Choose a different pitch axis to prove assignments, not only signs, persist.
+  im.calibration.draft.pitch.axis = 1;
+  im.calibration.draft.pitch.full = 1;
+  check('tilt check accepts the edited mapping', im.acceptCalibration());
+  rig.ax(2, 0.8); rig.ax(1, 0.6);
+  rig.run(100);
+  check('tilt calibration stays active after polling',
+    im.map.stored && im.map.reverse.roll && im.map.pitch.axis === 1
+      && im.channels.roll < -0.5 && im.channels.pitch > 0.4);
+  check('saved tilt calibration leaves idle throttle zero', im.channels.throttle === 0);
+  im.keys.add('KeyW'); rig.run(1264);
+  check('saved tilt calibration keeps W throttle', im.channels.throttle === 1);
+  im.keys.delete('KeyW'); im.resetKeyboardSticks();
+  const reload = new Rig(pad, storage);
+  reload.run(100);
+  check('tilt calibration survives a reload', reload.im.map.stored
+    && reload.im.map.reverse.roll && reload.im.map.pitch.axis === 1
+    && reload.im.channels.roll < -0.5 && reload.im.channels.throttle === 0);
+  const radio = new Rig(makePad([0, 0, -1, 0], 8, 'Other radio'), storage);
+  radio.run(100);
+  check('an ordinary radio does not inherit a tilt calibration',
+    !radio.im.map.stored && radio.im.map.roll.axis === 0
+      && radio.im.map.throttle.axis === 2);
+  const otherLayout = makePad(Array(windows ? 6 : 10).fill(0), windows ? 8 : 32,
+    windows ? 'WebFPV Tilt Pad' : 'TinyUSB HID (Vendor: 303a Product: 1001)');
+  const other = new Rig(otherLayout, storage); other.run(100);
+  check('a different HID layout gets its own default axes', !other.im.map.stored
+    && other.im.map.pitch.axis === (windows ? 3 : 5));
+  const legacy = memoryStorage();
+  legacy.setItem('webfpv_stick_map_v1', JSON.stringify({
+    roll: { axis: 4, center: 0, full: 1 }, pitch: { axis: 1, center: 0, full: -1 },
+    yaw: { axis: 3, center: 0, full: 1 }, throttle: { axis: 2, low: -1, high: 1 },
+  }));
+  const old = new Rig(pad, legacy); old.run(100);
+  check('a legacy radio calibration cannot override tilt throttle or axes',
+    !old.im.map.stored && old.im.map.roll.axis === 2 && old.im.channels.throttle === 0);
+  old.im.startCalibrationCheck();
+  old.im.setStickMode(1);
+  check('stick mode cannot rewrite firmware axes inside tilt check',
+    old.im.calibration.draft.roll.axis === 2
+      && old.im.calibration.draft.pitch.axis === (windows ? 5 : 3));
+}
+
+section('an ESP32 tilt pad leaves throttle to W and S');
+{
+  const unlabelled = makePad([0, 0, 0, 0, 0, 0], 8, 'WebFPV Tilt Pad (Vendor: 303a Product: 1001)');
+  unlabelled.mapping = '';
+  const plainRig = new Rig(unlabelled);
+  plainRig.ax(2, 1);
+  plainRig.step();
+  check('a tilt pad without the browser\'s standard flag still flies the standard layout',
+    plainRig.im.mapReport().map === 'standard' && plainRig.im.channels.roll > 0.9,
+    JSON.stringify({ map: plainRig.im.mapReport(), channels: plainRig.im.channels }));
+
+  const pad = makePad([0, 0, 0, 0, 0, 0], 8, 'WebFPV Tilt Pad (Vendor: 303a Product: 1001)');
+  pad.mapping = 'standard';
+  const rig = new Rig(pad);
+  const im = rig.im;
+  const hold = (code, ms) => { im.keys.add(code); rig.run(ms); };
+  const release = (code, ms = 400) => { im.keys.delete(code); rig.run(ms); };
+
+  im.flying = true;
+  check('the tilt pad is listed and flown through the standard layout',
+    im.firstGamepad() !== null && im.mapReport().map === 'standard', JSON.stringify(im.mapReport()));
+
+  hold('KeyW', 1264);
+  check('W still reaches full throttle while the tilt pad is connected',
+    im.channels.throttle === 1, String(im.channels.throttle));
+  release('KeyW');
+  check('letting go rests on hover instead of snapping to the pad\'s neutral axis',
+    im.channels.throttle === im.kbHover, String(im.channels.throttle));
+
+  hold('KeyS', 304);
+  const sink = im.channels.throttle;
+  release('KeyS');
+  check('S lowers the keyboard collective and release returns to hover',
+    sink < im.kbHover && im.channels.throttle === im.kbHover,
+    `${sink} -> ${im.channels.throttle}`);
+
+  im.startCalibration();
+  check('the tilt-pad calibration asks for roll, pitch and yaw but not a hardware throttle',
+    im.calibration && !im.calibration.steps.includes('throttle'),
+    im.calibration && im.calibration.steps.join(','));
+  im.cancelCalibration();
+
+  im.startCalibration();
+  rig.run(1000);
+  for (const axis of [0, 2, 3]) {
+    rig.ax(axis, 1);
+    rig.run(80);
+    rig.ax(axis, -1);
+    rig.run(80);
+    rig.ax(axis, 0);
+  }
+  rig.run(600);
+  check('three moving axes are enough for the tilt-pad sweep, which lands on roll',
+    rig.view() && rig.view().step === 'roll', rig.view() && rig.view().step);
+  for (const [axis, want] of [[2, 'pitch'], [3, 'yaw'], [0, 'confirm']]) {
+    rig.ax(axis, 1);
+    rig.run(500);
+    rig.ax(axis, 0);
+    rig.run(350);
+    check(`the tilt-pad wizard advances from axis ${axis} to ${want}`,
+      rig.view() && rig.view().step === want, rig.view() && rig.view().step);
+  }
+  check('the three-axis tilt map saves without inventing a throttle axis',
+    im.acceptCalibration() === true && im.map.stored
+      && !(im.map.throttle && Number.isInteger(im.map.throttle.axis)),
+    JSON.stringify({ stored: im.map.stored, throttle: im.map.throttle }));
+}
+
 section('the keyboard throttle: touching down parks it, a touch and go does not');
 {
   const rig = new Rig(null);

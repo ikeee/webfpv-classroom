@@ -9,3 +9,6 @@ vendor/three@0.160.0/** -text
 # The preload generator compares its LF output byte-for-byte.
 src/fresh.js text eol=lf
 src/maps/preload.js text eol=lf
+
+# Portable controller sources and verification tools.
+hardware/tilt-controller/** text eol=lf

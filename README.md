@@ -14,6 +14,13 @@ No npm install or Steam is needed. Choose **Fly Solo > Career > Start > Fly** fo
 
 Read [LOCAL-DEPLOY.md](LOCAL-DEPLOY.md) for operation and rollback, [LICENSE](LICENSE) for GPL-3.0-or-later, and [NOTICE](NOTICE) for third-party materials and their separate restrictions. Do not assume the GPL code license applies to all artwork, voices, logos or music.
 
+## ESP32-S3 motion controller
+
+Firmware, XH-S3E and XIAO wiring, reproducible build commands and calibration
+troubleshooting are in [hardware/tilt-controller](hardware/tilt-controller/README.md).
+The simulator and controller source code are GPL-3.0-or-later. See NOTICE for
+third-party asset restrictions.
+
 The upstream README follows.
 
 # WebFPVSimulator
@@ -63,6 +70,12 @@ phone or tablet, turn it sideways: thumb sticks appear in flight, left
 thumb yaw and throttle (throttle stays where you leave it), right thumb
 roll and pitch, and they fly whichever Flight mode Settings says, Acro
 included.
+
+The classroom [WebFPV Tilt Pad](hardware/tilt-controller/README.md) adds
+ESP32-S3 + MPU6050-compatible motion input. Tilt drives roll/pitch, yaw is a
+rate, and W/S control throttle. Windows TinyUSB raw HID uses yaw axis 0, roll
+axis 2 and pitch axis 5. Settings > Check sticks saves per-layout mapping and
+channel reversals without assigning a tilt axis to throttle.
 
 Keys in flight: R resets to the start line, X cuts the motors, L arms
 launch control on the start line when Settings has it on, F8 opens the bug

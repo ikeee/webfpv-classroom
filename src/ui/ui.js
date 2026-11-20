@@ -21657,6 +21657,14 @@ export class Ui {
       if (this.calOnConfirm) {
         const ax = view.assigned || {};
         for (const [ch, b] of Object.entries(this.calAssignBtns)) {
+          if (ch === 'throttle' && view.keyboardThrottle) {
+            Ui.text(b, 'Throttle: W / S');
+            b.disabled = true;
+            b.classList.remove('on');
+            b.title = 'W raises thrust; S lowers it. Tilt axes do not control throttle.';
+            continue;
+          }
+          b.disabled = false;
           const name = ch[0].toUpperCase() + ch.slice(1);
           const label = view.listening === ch
             ? `${name}: move it`
