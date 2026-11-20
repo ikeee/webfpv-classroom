@@ -21,6 +21,14 @@ troubleshooting are in [hardware/tilt-controller](hardware/tilt-controller/READM
 The simulator and controller source code are GPL-3.0-or-later. See NOTICE for
 third-party asset restrictions.
 
+## Publication checks
+
+Run `npm run public:check` before committing or publishing. It checks tracked
+working files and the Git index for conversation exports, agent handoffs,
+private workstation paths and common credential formats. Local collaboration
+records and verification output belong outside the published source tree.
+This check cannot prove that older commits or external copies are clean.
+
 The upstream README follows.
 
 # WebFPVSimulator
@@ -28,8 +36,8 @@ The upstream README follows.
 A browser FPV simulator whose only current goal is flight feel
 indistinguishable from a real quad. Stage 1 is physics only: Betaflight
 4.5.1 compiled to WASM flying a first principles plant model, verified by
-a fixed harness. See CLAUDE.md and STAGE1.md for the rules and PROGRESS.md
-for the state of play. [TRACK-FROM-GIF.md](TRACK-FROM-GIF.md) is how a
+a fixed harness. See [STAGE1.md](STAGE1.md) for the physics specification
+and verification criteria. [TRACK-FROM-GIF.md](TRACK-FROM-GIF.md) is how a
 supplied RaceGOW track animation becomes a track in the game.
 
 ## Requirements

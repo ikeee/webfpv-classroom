@@ -194,6 +194,7 @@
     "check:tuneinvite": "node scripts/tuneinvite-check.js",
     "feel:response": "node scripts/stick-response.js",
     "feel:measure": "node scripts/tune-measure.js",
-    "coverage": "node scripts/coverage.js"
+    "coverage": "node scripts/coverage.js",
+    "public:check": "node scripts/publication-check.js"
   }
 }

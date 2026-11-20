@@ -5,15 +5,27 @@ build/
 *.log
 .DS_Store
 .loop/shots/
-# Loop SCREENSHOTS. The review loops write a still per round per view, and
-# 175 of them had been committed: 77 MB of the repository's 79 MB of .loop,
-# and 77 MB of every clone forever, for pictures whose only readers were the
-# round that took them. Nothing in src, scripts, configs or gates.config.json
-# cites one. The loops' RECORDS stay tracked and are the point: the disputes,
-# the handovers, the state, the probe JSON, and .loop/evidence, which
-# src/game/track.js and src/render/scene.js cite as the provenance for
-# numbers that are in the code.
-.loop/**/*.png
+# Local verification output and private collaboration records.
+.loop/*
+!.loop/gates.sha256
+!.loop/state.json
+.claude/
+.codex/
+.agents/
+.agent/
+prompts/
+CLAUDE.md
+AGENTS.md
+PROGRESS.md
+HANDOFF.md
+HANDOVER.md
+NEXT-SESSION-PROMPT.md
+*.jsonl
+*.har
+*.pcap
+*.pcapng
+*.bundle
+*.code-workspace
 tracks/json/edit-keys.json
 # Plan view PNGs written by tracks/plan.mjs while reviewing an import.
 tracks/_review/
